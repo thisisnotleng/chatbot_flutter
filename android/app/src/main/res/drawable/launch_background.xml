@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- White background -->
+    <item android:drawable="@android:color/white" />
+
+    <!-- Centered logo. To achieve 75% width, add transparent padding to your image asset. -->
+    <item>
+        <bitmap
+            android:gravity="center"
+            android:src="@drawable/welcome_logo" />
+    </item>
+</layer-list>
