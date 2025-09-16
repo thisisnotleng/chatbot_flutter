@@ -1,16 +1,77 @@
-# my_first_app
+🌱 Agri_Chatbot
 
-A new Flutter project.
+Agri_Chatbot is a Flutter-based AI chatbot designed to assist users with agricultural queries.
+It leverages Google’s Gemini 1.5 model with custom context integration to provide accurate, context-aware responses related to farming, crops, soil, weather, and agricultural practices.
 
-## Getting Started
+Lately, I’m focusing on learning and practicing Flutter & Dart development, and this project is part of that journey.
 
-This project is a starting point for a Flutter application.
+🚀 Features
 
-A few resources to get you started if this is your first Flutter project:
+🤖 AI-powered chatbot using Gemini 1.5 Model
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+🌾 Agriculture-focused responses with custom knowledge context
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+📱 Cross-platform app built with Flutter (Android, iOS, Web)
+
+💬 Simple and intuitive chat-style UI
+
+⚡ Real-time responses via API integration
+
+🔒 Context-aware conversation for more relevant answers
+
+🛠️ Tech Stack
+
+Frontend: Flutter (Dart)
+
+Backend / API: Python Flask 
+
+AI Model: Gemini 1.5
+
+State Management: setState() for local UI state + ValueNotifier/ValueListenableBuilder for theme switching
+
+Database / Storage: MySQL
+
+
+⚙️ Installation & Setup
+
+Clone the repository
+
+git clone https://github.com/yourusername/Agri_Chatbot.git
+cd flutter_app
+
+
+Install dependencies
+
+flutter pub get
+
+
+Run the app
+
+flutter run
+
+cd python/python_flask
+
+Run the app
+
+python app.py
+
+
+Configure API Key
+
+Add your Gemini API key and MySQL DB info in python_flask/.env.
+
+📸 Screenshots
+
+
+🎯 Roadmap
+
+ Add user authentication (login/signup)
+
+ Store chat history (MySQL)
+
+
+
+
+👨‍💻 Author
+
+Youleng GHOV – GitHub

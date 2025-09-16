@@ -17,32 +17,51 @@ class ChatScreen extends StatefulWidget {
 }
 
 class _ChatScreenState extends State<ChatScreen> {
-  late Future<List<Map<String, dynamic>>> messages;
   final TextEditingController msgController = TextEditingController();
-  int? currentChatId;
-  List<Map<String, dynamic>> tempMessages = [];
 
-  bool showTyping = true; // show floating typing bubble
-  Map<int, String> typingTexts = {}; // map for animated typing text
+  int? currentChatId;
+  bool showTyping = false;
+  Map<int, String> typingTexts = {}; // bot animated texts
+  Map<int, List<Map<String, dynamic>>> chatCache = {}; // cache chat history
+  List<Map<String, dynamic>> chatListCache = [];
+  bool chatListLoaded = false;
+  int typingAnimationSpeedMs = 40; // Lower is faster
 
   @override
   void initState() {
     super.initState();
     currentChatId = widget.chatId;
     if (currentChatId != null) {
-      messages = ApiService.fetchMessages(currentChatId!);
-    } else {
-      messages = Future.value([]);
+      _loadMessages(currentChatId!);
+    }
+    _loadChatList();
+  }
+
+  Future<void> _loadChatList() async {
+    if (!chatListLoaded) {
+      final chats = await ApiService.fetchChats(widget.userID);
+      setState(() {
+        chatListCache = chats;
+        chatListLoaded = true;
+      });
     }
   }
 
-  void _loadMessages(int chatId) {
-    setState(() {
-      currentChatId = chatId;
-      messages = ApiService.fetchMessages(chatId);
-      tempMessages.clear();
-      typingTexts.clear();
-    });
+  void _loadMessages(int chatId) async {
+    // Only fetch if not in cache
+    if (chatCache.containsKey(chatId)) {
+      setState(() {
+        currentChatId = chatId;
+        typingTexts.clear();
+      });
+    } else {
+      final fetched = await ApiService.fetchMessages(chatId);
+      setState(() {
+        currentChatId = chatId;
+        chatCache[chatId] = fetched;
+        typingTexts.clear();
+      });
+    }
   }
 
   Future<void> sendMessage() async {
@@ -50,8 +69,11 @@ class _ChatScreenState extends State<ChatScreen> {
     if (text.isEmpty) return;
 
     setState(() {
-      tempMessages.add({'sender': 'user', 'message': text});
-      showTyping = true; // show floating bubble
+      showTyping = true;
+      chatCache[currentChatId ?? -1] = [
+        ...(chatCache[currentChatId ?? -1] ?? []),
+        {'sender': 'user', 'message': text},
+      ];
     });
 
     msgController.clear();
@@ -62,34 +84,42 @@ class _ChatScreenState extends State<ChatScreen> {
       text,
     );
 
+    // If a new chat was created, update chat id and cache
     if (response.containsKey('new_chat')) {
+      final newChat = response['new_chat'];
       setState(() {
-        currentChatId = response['chat_id'];
+        currentChatId = newChat['chat_id'];
+        chatCache[currentChatId!] = [
+          {'sender': 'user', 'message': text},
+        ];
+        // Add new chat to chat list cache if not present
+        if (!chatListCache.any((c) => c['chat_id'] == newChat['chat_id'])) {
+          chatListCache.insert(0, newChat);
+        }
       });
     }
 
-    final backendMessages = await ApiService.fetchMessages(currentChatId!);
-
-    // Animate bot messages character by character
-    List<Map<String, dynamic>> newMessages = [...backendMessages];
-    Map<int, String> animatedMap = {};
-    for (int i = 0; i < newMessages.length; i++) {
-      if (newMessages[i]['sender'] == 'bot') {
-        animatedMap[i] = '';
-        _animateText(newMessages[i]['message'], i);
-      }
+    // Update chatCache directly with bot reply from response
+    if (response.containsKey('response')) {
+      setState(() {
+        chatCache[currentChatId!] = [
+          ...(chatCache[currentChatId!] ?? []),
+          {'sender': 'bot', 'message': response['response']},
+        ];
+      });
+      // Animate bot message
+      int botIndex = (chatCache[currentChatId!]?.length ?? 1) - 1;
+      _animateText(response['response'], botIndex);
     }
 
     setState(() {
-      messages = Future.value(newMessages);
-      tempMessages.clear();
       showTyping = false;
     });
   }
 
   void _animateText(String fullText, int index) {
     int currentIndex = 0;
-    Timer.periodic(const Duration(milliseconds: 30), (timer) {
+    Timer.periodic(Duration(milliseconds: typingAnimationSpeedMs), (timer) {
       if (currentIndex > fullText.length) {
         timer.cancel();
         return;
@@ -104,16 +134,15 @@ class _ChatScreenState extends State<ChatScreen> {
   void createNewChat() {
     setState(() {
       currentChatId = null;
-      messages = Future.value([]);
-      tempMessages.clear();
       typingTexts.clear();
+      chatCache.remove(-1); // clear temp new chat cache
     });
     Navigator.pop(context);
   }
 
   Future<void> logout() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
-    await prefs.clear(); // remove login state
+    await prefs.clear();
     if (!mounted) return;
     Navigator.pushReplacement(
       context,
@@ -128,40 +157,55 @@ class _ChatScreenState extends State<ChatScreen> {
             ? typingTexts[index]!
             : msg['message'];
 
-    return Row(
-      mainAxisAlignment:
-          isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (!isUser) // Bot avatar
-          CircleAvatar(
-            radius: 16,
-            // child: Icon(Icons.smart_toy, size: 18),
-            child: Image.asset('assets/images/agri_tech_logo.png'),
-            backgroundColor: Colors.white,
-          ),
-        Flexible(
-          child: Container(
-            padding: const EdgeInsets.all(12),
-            margin: EdgeInsets.only(
-              top: 4,
-              bottom: 4,
-              left: isUser ? 48 : 8,
-              right: isUser ? 8 : 48,
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: themeNotifier,
+      builder: (context, mode, child) {
+        final isDark = mode == ThemeMode.dark;
+        final userBg = isDark ? Colors.blue[700] : Colors.blue[200];
+        final botBg = isDark ? Colors.grey[800] : Colors.grey[300];
+        final userText = isDark ? Colors.white : Colors.black;
+        final botText = isDark ? Colors.white : Colors.black;
+        return Row(
+          mainAxisAlignment:
+              isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (!isUser)
+              CircleAvatar(
+                radius: 16,
+                child: Image.asset('assets/images/agri_tech_logo.png'),
+                backgroundColor: Colors.white,
+              ),
+            Flexible(
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                margin: EdgeInsets.only(
+                  top: 4,
+                  bottom: 4,
+                  left: isUser ? 48 : 8,
+                  right: isUser ? 8 : 48,
+                ),
+                decoration: BoxDecoration(
+                  color: isUser ? userBg : botBg,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  displayText,
+                  style: TextStyle(
+                    fontFamily: 'Kantumruy Pro',
+                    color: isUser ? userText : botText,
+                  ),
+                ),
+              ),
             ),
-            decoration: BoxDecoration(
-              color: isUser ? Colors.blue[200] : Colors.grey[300],
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Text(
-              displayText,
-              style: const TextStyle(fontFamily: 'Kantumruy Pro'),
-            ),
-          ),
-        ),
-        if (isUser) // User avatar
-          const CircleAvatar(radius: 16, child: Icon(Icons.person, size: 18)),
-      ],
+            if (isUser)
+              const CircleAvatar(
+                radius: 16,
+                child: Icon(Icons.person, size: 18),
+              ),
+          ],
+        );
+      },
     );
   }
 
@@ -171,7 +215,6 @@ class _ChatScreenState extends State<ChatScreen> {
       children: [
         CircleAvatar(
           radius: 16,
-          // child: Icon(Icons.smart_toy, size: 18),
           child: Image.asset('assets/images/agri_tech_logo.png'),
           backgroundColor: Colors.white,
         ),
@@ -199,9 +242,21 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final currentMessages =
+        currentChatId == null
+            ? (chatCache[-1] ?? [])
+            : (chatCache[currentChatId!] ?? []);
+
     return Scaffold(
       appBar: AppBar(
-        title: Text("AgriBot"),
+        
+        title: Text(
+          "AgriBot",
+          style: TextStyle(
+            fontFamily: 'Kantumruy Pro Bold',
+            color: (Colors.black54),
+          ),
+        ),
         actions: [
           ValueListenableBuilder<ThemeMode>(
             valueListenable: themeNotifier,
@@ -273,36 +328,27 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
             const SizedBox(height: 1),
             Expanded(
-              child: FutureBuilder<List<Map<String, dynamic>>>(
-                future: ApiService.fetchChats(widget.userID),
-                builder: (context, snapshot) {
-                  if (!snapshot.hasData) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
-
-                  final chats = snapshot.data!;
-                  if (chats.isEmpty) {
-                    return const Center(child: Text("No previous chats."));
-                  }
-
-                  return ListView.builder(
-                    itemCount: chats.length,
-                    itemBuilder: (context, index) {
-                      final chat = chats[index];
-                      return Card(
-                        margin: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                        child: ListTile(
-                          title: Text(chat['title']),
-                          onTap: () => _loadMessages(chat['chat_id']),
-                        ),
-                      );
-                    },
-                  );
-                },
-              ),
+              child:
+                  chatListLoaded
+                      ? (chatListCache.isEmpty
+                          ? const Center(child: Text("No previous chats."))
+                          : ListView.builder(
+                            itemCount: chatListCache.length,
+                            itemBuilder: (context, index) {
+                              final chat = chatListCache[index];
+                              return Card(
+                                margin: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 4,
+                                ),
+                                child: ListTile(
+                                  title: Text(chat['title']),
+                                  onTap: () => _loadMessages(chat['chat_id']),
+                                ),
+                              );
+                            },
+                          ))
+                      : const Center(child: CircularProgressIndicator()),
             ),
           ],
         ),
@@ -311,7 +357,7 @@ class _ChatScreenState extends State<ChatScreen> {
         children: [
           Expanded(
             child:
-                currentChatId == null && tempMessages.isEmpty
+                currentChatId == null && currentMessages.isEmpty
                     ? Center(
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
@@ -328,31 +374,19 @@ class _ChatScreenState extends State<ChatScreen> {
                         ],
                       ),
                     )
-                    : FutureBuilder<List<Map<String, dynamic>>>(
-                      future: messages,
-                      builder: (context, snapshot) {
-                        List<Map<String, dynamic>> allMessages = [];
-                        if (snapshot.hasData) {
-                          allMessages = [...snapshot.data!, ...tempMessages];
-                        } else {
-                          allMessages = [...tempMessages];
-                        }
-
-                        return ListView(
-                          padding: const EdgeInsets.symmetric(horizontal: 8),
-                          children: [
-                            ...allMessages
-                                .asMap()
-                                .entries
-                                .map(
-                                  (entry) =>
-                                      _buildMessageRow(entry.value, entry.key),
-                                )
-                                .toList(),
-                            if (showTyping) _buildTypingIndicator(),
-                          ],
-                        );
-                      },
+                    : ListView(
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      children: [
+                        ...currentMessages
+                            .asMap()
+                            .entries
+                            .map(
+                              (entry) =>
+                                  _buildMessageRow(entry.value, entry.key),
+                            )
+                            .toList(),
+                        if (showTyping) _buildTypingIndicator(),
+                      ],
                     ),
           ),
           Padding(
@@ -365,9 +399,17 @@ class _ChatScreenState extends State<ChatScreen> {
               children: [
                 Expanded(
                   child: TextField(
+                    style: const TextStyle(fontFamily: 'Kantumruy Pro'),
                     controller: msgController,
+                    maxLines: null, // allow multi-line
                     decoration: const InputDecoration(
                       hintText: "Type a message",
+                      focusedBorder: UnderlineInputBorder(
+                        borderSide: BorderSide(color: Color(0xFF0a3b03)),
+                      ),
+                      enabledBorder: UnderlineInputBorder(
+                        borderSide: BorderSide(color: Color(0xFF0a3b03)),
+                      ),
                     ),
                   ),
                 ),
@@ -385,7 +427,7 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 }
 
-// Single dot for typing indicator
+// Typing dots
 class Dot extends StatefulWidget {
   final int delay;
   const Dot({this.delay = 0, super.key});
