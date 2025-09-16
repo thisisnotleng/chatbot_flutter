@@ -36,7 +36,7 @@ Database / Storage: MySQL
 
 Clone the repository
 
-git clone https://github.com/yourusername/Agri_Chatbot.git
+git clone https://github.com/thisisnotleng/chatbot_flutter.git
 cd flutter_app
 
 
@@ -61,7 +61,9 @@ Configure API Key
 Add your Gemini API key and MySQL DB info in python_flask/.env.
 
 📸 Screenshots
+<img width="372" height="804" alt="image" src="https://github.com/user-attachments/assets/51ebaf3d-510e-4888-b6f8-a64d036f9052" />
 
+<img width="372" height="810" alt="image" src="https://github.com/user-attachments/assets/d30232be-a8b0-4d2d-9a60-1fe3e916fd29" />
 
 🎯 Roadmap
 
