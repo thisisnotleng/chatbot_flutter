@@ -1,0 +1,8 @@
+flask
+pillow
+numpy
+sentence-transformers
+google-generativeai
+faiss-cpu
+pymysql
+werkzeug
