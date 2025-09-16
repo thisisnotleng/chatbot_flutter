@@ -71,9 +71,5 @@ Add your Gemini API key and MySQL DB info in python_flask/.env.
 
  Store chat history (MySQL)
 
-
-
-
-👨‍💻 Author
-
-Youleng GHOV – GitHub
+## License
+MIT License
